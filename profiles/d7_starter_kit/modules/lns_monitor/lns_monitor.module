@@ -1,0 +1,161 @@
+<?php
+/**
+ * @file
+ * Code for the LNS - monitor feature.
+ */
+
+include_once 'lns_monitor.features.inc'; 
+
+/**
+ * Implements hook_menu().
+ */
+function lns_monitor_menu() {
+  $items['monitoring'] = array(
+    'title'           => 'Monitoring sites',
+    'page callback'   => 'lns_monitor_page_list',
+    'access callback' => TRUE,
+    'type'            => MENU_CALLBACK,
+  );
+
+  return $items;
+} 
+
+/**
+ * Menu callback, list monitored sites.
+ */
+function lns_monitor_page_list() {
+  if (!user_is_logged_in()) {
+    drupal_goto('user/login', array('query' => drupal_get_destination()));
+  }
+  else {
+    $path = 'admin/reports/prod-monitor';
+    menu_set_active_item($path);
+    return menu_execute_active_handler($path, FALSE);
+  }
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function lns_monitor_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id == 'prod_monitor_overview_form') {
+    // Position sites add form on top of sites list.
+    $form['sites']['#weight'] = -100;
+  }
+}
+
+/**
+ * Implementation of hook_environment().
+ */
+function lns_monitor_environment() {
+  return array(
+    'staging' => array(
+      'label' => t('Staging'),
+      'allowed' => array(
+        'default' => FALSE,
+      ),
+    ),
+  );
+} 
+
+/**
+ * Implementation of hook_environment_switch
+ */
+function lns_monitor_environment_switch($target_env, $current_env, $workflow = NULL) {
+  // Declare each optional development-related module
+  $devel_modules = array(
+    'devel',
+    'devel_generate',
+    'devel_node_access',
+    'views_ui',
+    'update',
+  );
+
+  switch ($target_env) {
+    case 'production':
+      module_disable($devel_modules);
+      _lns_monitor_set_error_level(ERROR_REPORTING_HIDE);
+      drupal_set_message('Disabled development modules');
+      return;
+      
+    case 'development':
+      module_enable($devel_modules);
+      _lns_monitor_set_error_level(ERROR_REPORTING_DISPLAY_ALL);
+      drupal_set_message('Enabled development modules');
+      return;
+  }
+}
+
+/**
+ * Implements hook_prod_check_alter()
+ * @param array reference to an associative array of all available checks
+ */
+function lns_monitor_prod_check_alter(&$checks) {
+  // Add custom check to the server category:
+  $checks['performance']['functions']['lns_monitor_prod_check_entity_cache'] = 'Entity cache';  
+  $checks['performance']['functions']['lns_monitor_prod_check_view_ccache']  = 'Views content cache';    
+  $checks['performance']['functions']['lns_monitor_prod_check_favicon']      = 'Favicon'; 
+} 
+
+/**
+ * Helper, check if module is active.
+ */
+function _lns_monitor_check_active_module($title, $module, $caller) {
+  $check    = array();     
+  $title    = $title;
+  $path     = 'admin/modules';
+  $settings = array(t('Enabled'), t('Disabled'));
+  if ($caller != 'internal') {
+    $path = PRODCHECK_BASEURL . $path;
+  }
+
+  $check['lns_monitor_'.$module.'_check'] = array(
+    '#title'      => t($title),
+    '#state'      => module_exists($module),
+    '#severity'   => ($caller == 'nagios') ? NAGIOS_STATUS_CRITICAL : PROD_CHECK_REQUIREMENT_ERROR,
+    '#value_ok'   => $settings[0],
+    '#value_nok'  => $settings[1],
+    '#description_ok'  => prod_check_ok_title($title, $path),
+    '#description_nok' => t('Your !link settings are set to %setting1, they should be set to %setting2 on a producion environment!',
+      array(
+        '!link' => '<em>'.l(t($title), $path, array('attributes' => array('title' => t($title)))).'</em>',
+        '%setting1' => $settings[1],
+        '%setting2' => $settings[0],
+      )
+    ),
+  );
+
+  return prod_check_execute_check($check, $caller);
+}
+
+/**
+ * Custom function to check some things.
+ * @param string the caller of the function, defaults to 'internal' but can also
+ *        be 'xmlrpc' or 'nagios'
+ * @return array you _must_ return prod_check_execute_check($check, $caller) as
+ *         per the example below to insure a proper status array is returned.
+ */
+function lns_monitor_prod_check_entity_cache($caller = 'internal') {
+  return _lns_monitor_check_active_module('Entity cache', 'entitycache', $caller);
+}
+
+/**
+ * Custom function to check some things.
+ */
+function lns_monitor_prod_check_view_ccache($caller = 'internal') {
+  return _lns_monitor_check_active_module('Views content cache', 'views_content_cache', $caller);
+}
+
+/**
+ * Custom function to check some things.
+ */
+function lns_monitor_prod_check_favicon($caller = 'internal') {
+  return _lns_monitor_check_active_module('Favicon', 'favicon', $caller);
+}
+
+/**
+ * Set error display level.
+ */
+function _lns_monitor_set_error_level($level = ERROR_REPORTING_DISPLAY_ALL) {
+  variable_set('error_level', $level);
+}

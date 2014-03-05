@@ -1,0 +1,28 @@
+name = Drupal7 Starter Kit
+description = Starter Kit for Drupal project with minimal module and recommanded module.
+version = VERSION
+core = 7.x
+dependencies[] = block
+dependencies[] = dblog
+dependencies[] = menu
+dependencies[] = locale
+dependencies[] = backup_migrate
+dependencies[] = ctools
+dependencies[] = devel
+dependencies[] = entitycache
+dependencies[] = environment
+dependencies[] = favicon
+dependencies[] = features
+dependencies[] = module_filter
+dependencies[] = node_page_disable
+dependencies[] = prod_check
+dependencies[] = strongarm
+dependencies[] = l10n_update
+dependencies[] = lns_monitor
+dependencies[] = security_review
+
+; Information added by drupal.org packaging script on 2013-04-03
+version = "7.22"
+project = "drupal"
+datestamp = "1365027012"
+
